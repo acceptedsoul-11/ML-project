@@ -1,0 +1,42 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.streamlit/secrets.toml
+.env
+.env.*
+!.env.example
+
+# GeoLife includes timestamped GPS traces. Keep all raw and processed tracks local.
+data/raw/
+data/processed/
+help/
+data/road_network/candidate_visualization.html
+
+# Local caches and generated per-point route artifacts can contain coordinates.
+cache/
+results/figures/
+results/metrics/
+results/*.json
+output/RouteLens_Source_and_Demo.zip
+output/assets/
+output/pdf/
+output/presentation/
+output/results/
+
+# Keep the aggregated experiment handover only.
+!results/experiments/
+results/experiments/*
+!results/experiments/handover_sample/
+results/experiments/handover_sample/*
+!results/experiments/handover_sample/experiment_results.csv
+!results/experiments/handover_sample/experiment_results.json
+!results/experiments/handover_sample/experiment_config.json
+!results/experiments/handover_sample/coverage_by_buffer.png
+!results/experiments/handover_sample/delay_by_buffer.png
+!results/experiments/handover_sample/runtime_by_buffer.png
+!results/experiments/handover_sample/ground_truth_accuracy_unavailable.txt
+
+# Scratch application exports.
+app/
