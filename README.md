@@ -63,7 +63,7 @@ The optional timestamp is descriptive. GPS accuracy controls the Gaussian emissi
 
 Choose **Trajectory** in Map Matching or open **Trajectory Explorer**. Select a processed GeoLife CSV, upload a CSV, or enter one coordinate per line. CSV uploads can map custom latitude/longitude, timestamp, and segment columns. Timestamp and segment are optional; when a segment column is absent, all observations are treated as one input segment. Rows with missing, nonnumeric, or out-of-range coordinates are rejected with row information.
 
-Choose **Run HMM map matching**. The app displays the original GPS trace, selected road geometries, unmatched observations, per-point results, segment summaries, run time, and a downloadable CSV derived from that invocation. The CSV contains every input observation, with a `matched` flag and nullable selected-edge fields for unmatched points.
+Choose **Run HMM map matching**. The map displays the original GPS trace, an individual marker for each actual GPS observation, selected road geometries, and trajectory endpoints. Purple markers matched a road; coral markers have no candidate within the search radius. Hover over a point to see its observation number and match details. Use the map layer control to toggle observation points, trace, roads, and matched-road overlays. The app also shows per-point results, segment summaries, run time, and a downloadable CSV derived from that invocation. The CSV contains every input observation, with a `matched` flag and nullable selected-edge fields for unmatched points.
 
 ## Evaluation and metric limits
 

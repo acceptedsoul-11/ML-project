@@ -173,6 +173,7 @@ def add_map_frame(fmap: folium.Map, graph: Any, edges: Any, to_wgs84: Any,
         return
 
     gps_layer = folium.FeatureGroup(name="Original GPS trace", show=True)
+    gps_points_layer = folium.FeatureGroup(name="Actual GPS observations", show=True)
     matched_layer = folium.FeatureGroup(name="Viterbi matched roads", show=True)
     start_end_layer = folium.FeatureGroup(name="Trajectory endpoints", show=True)
     if predictions is not None and not predictions.empty:
@@ -182,6 +183,22 @@ def add_map_frame(fmap: folium.Map, graph: Any, edges: Any, to_wgs84: Any,
             if len(coords) > 1:
                 folium.PolyLine(coords, color="#c74440", weight=3, opacity=.85,
                                 tooltip=f"Original GPS · segment {segment_id}").add_to(gps_layer)
+            for row in segment.itertuples(index=False):
+                is_matched = bool(row.matched)
+                if is_matched:
+                    road = row.road_name if pd.notna(row.road_name) else "Unnamed road"
+                    distance = float(row.distance_meters) if pd.notna(row.distance_meters) else None
+                    detail = f"Matched to {road}" + (f" · {distance:.1f} m away" if distance is not None else "")
+                    fill_color = "#5c4ad1"
+                else:
+                    detail = "No road candidate within search radius"
+                    fill_color = "#f06463"
+                folium.CircleMarker(
+                    [float(row.latitude), float(row.longitude)], radius=3.5,
+                    color="white", weight=1, fill=True, fill_color=fill_color,
+                    fill_opacity=.95,
+                    tooltip=f"GPS observation #{int(row.point_number)} · {detail}",
+                ).add_to(gps_points_layer)
             for sequence_block, block in segment[segment.matched].groupby("sequence_block", sort=False):
                 selected_edges = block.drop_duplicates(["u", "v", "key"])
                 for _, match in selected_edges.iterrows():
@@ -197,14 +214,9 @@ def add_map_frame(fmap: folium.Map, graph: Any, edges: Any, to_wgs84: Any,
                 folium.CircleMarker([last.latitude, last.longitude], radius=5, color="white", weight=2,
                                     fill=True, fill_color="#df8736", fill_opacity=1,
                                     tooltip="Trajectory end").add_to(start_end_layer)
-        unmatched = predictions[~predictions.matched]
-        if not unmatched.empty:
-            for row in unmatched.itertuples(index=False):
-                folium.CircleMarker([row.latitude, row.longitude], radius=4, color="#bd6b28", weight=1,
-                                    fill=True, fill_color="#f3b165", fill_opacity=.8,
-                                    tooltip="No road candidate within search radius").add_to(gps_layer)
     gps_layer.add_to(fmap)
     matched_layer.add_to(fmap)
+    gps_points_layer.add_to(fmap)
     start_end_layer.add_to(fmap)
 
 
