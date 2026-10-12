@@ -2,6 +2,10 @@
 
 RouteLens is a Streamlit application for comparing GPS observations with the saved Beijing OpenStreetMap driving graph. It supports local road candidates for a single point and probabilistic HMM/Viterbi map matching for a trajectory. The route output is computed from the selected input each time; historical candidate and matched-route CSVs are retained as research artifacts and are not used as predictions.
 
+## Authors
+# Sanvika M Naik
+# Sairam Charan Nukana
+
 ## Research paper relationship
 
 This is a paper-informed GeoLife implementation, not a numerical reproduction of “Real-Time Dense Map Matching with Naive Hidden Markov Models: Delay versus Accuracy.” It now includes both the existing full-trajectory network-distance HMM baseline and a delayed sliding-window naive-HMM decoder. The sliding model combines GPS-distance, causal heading, and available OSM speed-limit signals in emissions, plus backtrack and midpoint-discrepancy transition features. It does not require shortest-path transitions. Its feature weights are explicit untrained heuristic defaults because the paper does not report its learned L1-SVM weight values. The paper's 0.33%–4.6% classification error is from 1,227 labeled San Francisco/Palo Alto observations and is not a GeoLife result. The Beijing GeoLife sample has no verified road-edge labels, so accuracy/error is blank; coverage and GPS-to-road distance are reported only as separate fit/availability metrics.
