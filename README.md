@@ -3,8 +3,8 @@
 RouteLens is a Streamlit application for comparing GPS observations with the saved Beijing OpenStreetMap driving graph. It supports local road candidates for a single point and probabilistic HMM/Viterbi map matching for a trajectory. The route output is computed from the selected input each time; historical candidate and matched-route CSVs are retained as research artifacts and are not used as predictions.
 
 ## Authors
-# Sanvika M Naik
-# Sairam Charan Nukana
+Sanvika M Naik
+Sairam Charan Nukana
 
 ## Research paper relationship
 
