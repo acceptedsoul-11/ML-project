@@ -285,6 +285,7 @@ def show_trajectory_result(result: dict[str, Any]) -> None:
         )
     st_folium(make_trajectory_map(result), height=590, use_container_width=True,
               returned_objects=[])
+    st.caption("Map key: purple dots are matched GPS observations; coral dots are unmatched. Hover a dot for point details, or toggle layers from the map control.")
     with st.expander("Per-point predictions", expanded=True):
         display = frame.copy()
         display["status"] = np.where(display.matched, "Matched", "Unmatched")
@@ -358,7 +359,7 @@ def main() -> None:
     elif page == "Evaluation":
         render_evaluation()
     else:
-        render_buffer_experiments()
+        render_buffer_experiments(radius, max_candidates)
 
 
 def render_map_matching(radius: int, max_candidates: int) -> None:
@@ -591,7 +592,7 @@ def render_evaluation() -> None:
     st.dataframe(summary, use_container_width=True, hide_index=True)
 
 
-def render_buffer_experiments() -> None:
+def render_buffer_experiments(radius: int, max_candidates: int) -> None:
     """Interactive, reproducible delay/coverage sweep over processed GPS data."""
     st.subheader("Buffer experiments")
     st.caption("Compare nearest-road, full-trajectory HMM, and delayed sliding-window predictions on processed trajectories.")
@@ -621,36 +622,49 @@ def render_buffer_experiments() -> None:
         ground_truth = st.selectbox("Optional directed-edge label column", gt_options)
         run = st.form_submit_button("Run experiment", type="primary", use_container_width=True)
 
-    if not run:
+    experiment_signature = hashlib.sha256(repr((
+        tuple(selected_paths), tuple(windows), tuple(buffers), tuple(models),
+        ground_truth, int(radius), int(max_candidates),
+    )).encode("utf-8")).hexdigest()
+    if run:
+        if not selected_paths or not models:
+            st.error("Select at least one trajectory and one method.")
+            return
+        if MODEL_SLIDING in models and not any(0 <= n < t for t in windows for n in buffers):
+            st.error("Each sliding-window configuration needs 0 ≤ N < T. Adjust the selected window and buffer sizes.")
+            return
+        inputs = [
+            (path, read_trajectory(path, (ROOT / path).stat().st_mtime))
+            for path in selected_paths
+        ]
+        progress = st.progress(0, text="Starting experiment…")
+        status = st.empty()
+
+        def update_progress(done: int, total: int, message: str) -> None:
+            progress.progress(min(1.0, done / max(1, total)), text=message)
+            status.caption(message)
+
+        try:
+            outcome = run_delay_experiment(
+                inputs, window_sizes=windows or [5], buffer_sizes=buffers or [0],
+                baselines=models, ground_truth_column=None if ground_truth == gt_options[0] else ground_truth,
+                radius_meters=float(radius), max_candidates=int(max_candidates),
+                graph_context=cached_network(), on_progress=update_progress,
+            )
+        except Exception as exc:
+            st.error(f"Experiment failed: {exc}")
+            return
+        progress.progress(1.0, text="Experiment complete")
+        st.session_state["buffer_experiment_result"] = outcome
+        st.session_state["buffer_experiment_signature"] = experiment_signature
+
+    outcome = st.session_state.get("buffer_experiment_result")
+    if not outcome:
         st.info("Choose trajectories and run a sweep. Results and plots will be saved under results/experiments/.")
         return
-    if not selected_paths or not models:
-        st.error("Select at least one trajectory and one method.")
+    if st.session_state.get("buffer_experiment_signature") != experiment_signature:
+        st.info("Experiment settings changed. Run the sweep again to refresh these results.")
         return
-    if MODEL_SLIDING in models and not any(0 <= n < t for t in windows for n in buffers):
-        st.error("Each sliding-window configuration needs 0 ≤ N < T. Adjust the selected window and buffer sizes.")
-        return
-    inputs = [
-        (path, read_trajectory(path, (ROOT / path).stat().st_mtime))
-        for path in selected_paths
-    ]
-    progress = st.progress(0, text="Starting experiment…")
-    status = st.empty()
-
-    def update_progress(done: int, total: int, message: str) -> None:
-        progress.progress(min(1.0, done / max(1, total)), text=message)
-        status.caption(message)
-
-    try:
-        outcome = run_delay_experiment(
-            inputs, window_sizes=windows or [5], buffer_sizes=buffers or [0],
-            baselines=models, ground_truth_column=None if ground_truth == gt_options[0] else ground_truth,
-            graph_context=cached_network(), on_progress=update_progress,
-        )
-    except Exception as exc:
-        st.error(f"Experiment failed: {exc}")
-        return
-    progress.progress(1.0, text="Experiment complete")
     results = outcome["results"]
     st.success(f"Saved reproducible results to `{outcome['output_dir']}`")
     st.download_button(
