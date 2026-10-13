@@ -1,1 +1,0 @@
-No verified directed road-edge labels were supplied. Accuracy/error plots are intentionally omitted. Coverage and GPS-to-road distance are proxy metrics, not accuracy.

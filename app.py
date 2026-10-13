@@ -28,12 +28,6 @@ from src.map_matching.inference import (
     predict_trajectory,
     validate_coordinates,
 )
-from src.evaluation.delay_accuracy import (
-    MODEL_FULL,
-    MODEL_NEAREST,
-    MODEL_SLIDING,
-    run_delay_experiment,
-)
 
 ROOT = Path(__file__).resolve().parent
 SAMPLE = ROOT / "data" / "processed" / "user_000" / "20081023025304.csv"
@@ -336,7 +330,7 @@ def main() -> None:
     with st.sidebar:
         st.markdown("## RouteLens")
         st.caption("Your trip, mapped to real streets")
-        page = st.radio("Workspace", ["Map Matching", "Trajectory Explorer", "Evaluation", "Buffer Experiments"], label_visibility="collapsed")
+        page = st.radio("Workspace", ["Map Matching", "Trajectory Explorer", "Evaluation"], label_visibility="collapsed")
         st.divider()
         st.markdown("**Model settings**")
         radius = st.slider("Candidate search radius", 25, 250, int(DEFAULT_RADIUS_METERS), 25, format="%d m")
@@ -356,10 +350,8 @@ def main() -> None:
         render_map_matching(radius, max_candidates)
     elif page == "Trajectory Explorer":
         render_explorer(radius, max_candidates)
-    elif page == "Evaluation":
-        render_evaluation()
     else:
-        render_buffer_experiments(radius, max_candidates)
+        render_evaluation()
 
 
 def render_map_matching(radius: int, max_candidates: int) -> None:
@@ -538,7 +530,7 @@ def render_evaluation() -> None:
         st.caption("1,227 labeled observations from San Francisco and Palo Alto test drives.")
     with paper_right:
         st.markdown(
-            "The supplied paper reports a dense, real-time HMM with a sliding window and buffer. "
+            "The supplied paper describes a dense, real-time HMM with a sliding window and delayed commitment. "
             "Its emissions combine GPS-to-road distance, heading alignment, and a speed-limit constraint. "
             "Transitions use backtrack prevention and midpoint-distance discrepancy. The authors learn "
             "feature weights with L1-regularized SVMs (C = 1)."
@@ -554,7 +546,7 @@ def render_evaluation() -> None:
             "GPS-to-road emission.\n\n"
             "**Current implementation:** full-trajectory Viterbi, Gaussian distance emissions, and "
             "directed shortest-path distance transitions on the saved Beijing graph.\n\n"
-            "**Not reproduced:** sliding-window delay/buffer, heading and speed-limit emissions, "
+            "**Not implemented in RouteLens:** the paper's sliding-window decoder, delayed commitment, heading and speed-limit emissions, "
             "backtrack and midpoint transition features, and the learned SVM weights. The supplied "
             "paper does not report the learned weight values. GeoLife Beijing trajectories also lack "
             "the paper’s labeled road ground truth, so its classification error cannot be claimed here."
@@ -590,100 +582,6 @@ def render_evaluation() -> None:
     summary["coverage_percent"] = 100 * summary.matched / summary.observations
     st.subheader("Per-segment summary")
     st.dataframe(summary, use_container_width=True, hide_index=True)
-
-
-def render_buffer_experiments(radius: int, max_candidates: int) -> None:
-    """Interactive, reproducible delay/coverage sweep over processed GPS data."""
-    st.subheader("Buffer experiments")
-    st.caption("Compare nearest-road, full-trajectory HMM, and delayed sliding-window predictions on processed trajectories.")
-    files = trajectory_catalog()
-    if not files:
-        st.warning("No processed GeoLife CSV files are available in data/processed.")
-        return
-    with st.form("buffer_experiment_form"):
-        users = sorted({Path(path).parts[2] for path in files})
-        user = st.selectbox("GeoLife user", users)
-        user_files = [path for path in files if Path(path).parts[2] == user]
-        selected_paths = st.multiselect("Trajectories", user_files, default=user_files[:1])
-        c1, c2 = st.columns(2)
-        with c1:
-            windows = st.multiselect("Window sizes T", [5, 10, 15, 20], default=[5, 10, 15])
-        with c2:
-            buffers = st.multiselect("Future buffer sizes N", [0, 1, 2, 3, 5, 7, 10], default=[0, 1, 2, 3, 5])
-        models = st.multiselect(
-            "Methods", [MODEL_NEAREST, MODEL_FULL, MODEL_SLIDING],
-            default=[MODEL_NEAREST, MODEL_FULL, MODEL_SLIDING],
-            format_func={MODEL_NEAREST: "Nearest road", MODEL_FULL: "Full-sequence HMM", MODEL_SLIDING: "Sliding-window HMM"}.get,
-        )
-        gt_options = ["(No ground-truth labels)"]
-        if selected_paths:
-            preview = read_trajectory(selected_paths[0], (ROOT / selected_paths[0]).stat().st_mtime)
-            gt_options += [column for column in preview.columns if any(token in column.lower() for token in ("ground_truth", "true_edge", "reference_edge"))]
-        ground_truth = st.selectbox("Optional directed-edge label column", gt_options)
-        run = st.form_submit_button("Run experiment", type="primary", use_container_width=True)
-
-    experiment_signature = hashlib.sha256(repr((
-        tuple(selected_paths), tuple(windows), tuple(buffers), tuple(models),
-        ground_truth, int(radius), int(max_candidates),
-    )).encode("utf-8")).hexdigest()
-    if run:
-        if not selected_paths or not models:
-            st.error("Select at least one trajectory and one method.")
-            return
-        if MODEL_SLIDING in models and not any(0 <= n < t for t in windows for n in buffers):
-            st.error("Each sliding-window configuration needs 0 ≤ N < T. Adjust the selected window and buffer sizes.")
-            return
-        inputs = [
-            (path, read_trajectory(path, (ROOT / path).stat().st_mtime))
-            for path in selected_paths
-        ]
-        progress = st.progress(0, text="Starting experiment…")
-        status = st.empty()
-
-        def update_progress(done: int, total: int, message: str) -> None:
-            progress.progress(min(1.0, done / max(1, total)), text=message)
-            status.caption(message)
-
-        try:
-            outcome = run_delay_experiment(
-                inputs, window_sizes=windows or [5], buffer_sizes=buffers or [0],
-                baselines=models, ground_truth_column=None if ground_truth == gt_options[0] else ground_truth,
-                radius_meters=float(radius), max_candidates=int(max_candidates),
-                graph_context=cached_network(), on_progress=update_progress,
-            )
-        except Exception as exc:
-            st.error(f"Experiment failed: {exc}")
-            return
-        progress.progress(1.0, text="Experiment complete")
-        st.session_state["buffer_experiment_result"] = outcome
-        st.session_state["buffer_experiment_signature"] = experiment_signature
-
-    outcome = st.session_state.get("buffer_experiment_result")
-    if not outcome:
-        st.info("Choose trajectories and run a sweep. Results and plots will be saved under results/experiments/.")
-        return
-    if st.session_state.get("buffer_experiment_signature") != experiment_signature:
-        st.info("Experiment settings changed. Run the sweep again to refresh these results.")
-        return
-    results = outcome["results"]
-    st.success(f"Saved reproducible results to `{outcome['output_dir']}`")
-    st.download_button(
-        "Download results CSV", results.to_csv(index=False).encode("utf-8"),
-        file_name="experiment_results.csv", mime="text/csv",
-    )
-    st.dataframe(results, use_container_width=True, hide_index=True)
-    for plot in outcome["plots"]:
-        st.image(str(outcome["output_dir"] / plot), caption=plot.replace("_", " ").removesuffix(".png").title(), use_container_width=True)
-    if results.ground_truth_accuracy_percent.isna().all():
-        st.info("No verified directed-edge labels were supplied. Accuracy/error is left blank; coverage and GPS-to-road distance are fit proxies, not accuracy.")
-    with st.expander("Metric definitions and method notes"):
-        st.markdown(
-            "**Coverage** is the fraction of points assigned a candidate. **GPS-to-road distance** measures geometric fit. "
-            "**Prediction delay** is the number of future observations consumed before commitment. Offline baselines are "
-            "reported as final at trajectory end. **Invalid transitions** count adjacent chosen roads without a directed "
-            "downstream-to-upstream path; the paper-informed naive HMM does not force shortest-path topology."
-        )
-        st.caption("Feature weights are explicit untrained heuristic defaults, not learned SVM weights from the paper. The CSV, config JSON, and measured-run plots are saved with the experiment.")
 
 
 if __name__ == "__main__":

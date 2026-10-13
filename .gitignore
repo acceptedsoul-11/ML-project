@@ -25,18 +25,8 @@ output/pdf/
 output/presentation/
 output/results/
 
-# Keep the aggregated experiment handover only.
-!results/experiments/
-results/experiments/*
-!results/experiments/handover_sample/
-results/experiments/handover_sample/*
-!results/experiments/handover_sample/experiment_results.csv
-!results/experiments/handover_sample/experiment_results.json
-!results/experiments/handover_sample/experiment_config.json
-!results/experiments/handover_sample/coverage_by_buffer.png
-!results/experiments/handover_sample/delay_by_buffer.png
-!results/experiments/handover_sample/runtime_by_buffer.png
-!results/experiments/handover_sample/ground_truth_accuracy_unavailable.txt
+# Generated experimental outputs are not part of the application.
+results/experiments/
 
 # Scratch application exports.
 app/
